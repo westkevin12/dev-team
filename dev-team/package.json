@@ -1,0 +1,27 @@
+{
+  "name": "dev-team",
+  "version": "1.0.0",
+  "private": true,
+  "description": "An advanced multi-agent system that simulates a real-world software development team. Built on LangGraph for high-level orchestration and `crewai` for collaborative, role-based task execution, this platform automates the entire development lifecycle from requirements gathering to creating production-ready pull requests.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "multi-agent",
+    "langgraph",
+    "crewai",
+    "automation",
+    "llm",
+    "gemini",
+    "software-development",
+    "devops"
+  ],
+  "author": "west <github.com/westkevin12>",
+  "dependencies": {
+    "lighthouse": "^12.5.1",
+    "chrome-launcher": "^1.1.0"
+  }
+}
