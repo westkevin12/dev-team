@@ -13,24 +13,23 @@
 # limitations under the License.
 
 # mypy: disable-error-code="union-attr"
+import os
+import json
+import subprocess
+import tempfile
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langchain_google_vertexai import ChatVertexAI
 from langgraph.graph import END, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
-
-import os
-import json
 from typing import Any, Dict, List, Optional
-
 from github import Github, UnknownObjectException, GithubException
-
 from .crew.crew import DevCrew
 from agents.lead_developer_agent import LeadDeveloperAgent
-# Assuming utils are in the same app directory
 from .utils.github_integration import CodeFix, GitHubIntegration
 from .utils.lighthouse import LighthouseConfig, LighthouseRunner
+from code_audit_agent import CodeAuditAgent #use new agent as tool in code analysis
 
 LOCATION = "global"
 LLM = "gemini-2.0-flash-001"
@@ -327,7 +326,6 @@ def _create_release_logic(repo_full_name: str, tag_name: str, release_name: str,
     except GithubException as e:
         return {"error": f"Error creating release '{release_name}': {e.status} {getattr(e, 'data', str(e))}", "status": "error_api"}
 
-# --- Planning Functions (moved from PlanningAgent) ---
 def _gather_requirements_logic(initial_input: str) -> dict:
     """
     Processes initial user input to structure it as a preliminary requirement.
@@ -379,23 +377,58 @@ def _translate_context_logic(human_intent: str, technical_specs: dict) -> dict:
 def _code_analysis_logic(file_content: str) -> dict:
     """
     Performs static analysis on a file's content.
-    This is a placeholder for a real linting/analysis tool.
+    Integrates Pylint for more comprehensive analysis.
     """
     print(f"Code Analysis: Analyzing file content...")
-    # Placeholder logic
-    lines = file_content.splitlines()
-    complexity = len(lines) / 10  # Dummy complexity score
-    errors = []
-    if len(lines) > 300:
-        errors.append("Warning: File is over 300 lines long, consider refactoring.")
-    if "TODO" in file_content:
-        errors.append("Info: Found 'TODO' comments in the code.")
+    suggestions = ["Consider adding more detailed comments if not already present."]
+    complexity_score = "N/A" # Default
+
+    # Create a temporary file to run pylint
+    # Pylint works best with files, not direct string input for full analysis
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp_file:
+        tmp_file.write(file_content)
+        tmp_file_path = tmp_file.name
+
+    try:
+        # Ensure pylint is installed: pip install pylint
+        # Running pylint as a subprocess and capturing JSON output
+        # The --disable=all --enable=R,C,W,E options focus on common issues.
+        # You can customize the pylint command further, e.g., by using a .pylintrc file.
+        result = subprocess.run(
+            ["pylint", "--output-format=json", "--disable=all", "--enable=R,C,W,E,F", tmp_file_path],
+            capture_output=True, text=True, check=False # `check=False` to handle non-zero exit codes from pylint
+        )
+
+        if result.stdout:
+            try:
+                pylint_issues = json.loads(result.stdout)
+                for issue in pylint_issues:
+                    errors.append(
+                        f"{issue.get('type', 'N/A').capitalize()} ({issue.get('symbol', 'N/A')}): {issue.get('message', 'No message')} at line {issue.get('line', 'N/A')}, char {issue.get('column', 'N/A')}"
+                    )
+            except json.JSONDecodeError:
+                errors.append("Error: Could not parse Pylint JSON output. Raw output:\n" + result.stdout[:500])
+        
+        if result.stderr:
+             errors.append(f"Pylint stderr: {result.stderr[:500]}")
+
+        # Placeholder for complexity
+        # You might parse specific metrics or use another tool like 'radon' for cyclomatic complexity.
+        # For now, we'll keep it simple.
+        complexity_score = f"{len(file_content.splitlines()) / 100:.2f}" # Basic line-based complexity
+
+    except FileNotFoundError:
+        errors.append("Error: Pylint command not found. Please ensure Pylint is installed and in PATH.")
+    except Exception as e:
+        errors.append(f"Error during Pylint execution: {str(e)}")
+    finally:
+        os.remove(tmp_file_path)
     
     return {
         "status": "analysis_complete",
-        "complexity_score": f"{complexity:.2f}",
+        "complexity_score": complexity_score,
         "linting_issues": errors if errors else "No major issues found.",
-        "suggestions": ["Consider adding more detailed comments."]
+        "suggestions": suggestions
     }
 
 def _documentation_generation_logic(file_content: str, file_path: str) -> dict:

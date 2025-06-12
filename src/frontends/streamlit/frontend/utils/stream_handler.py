@@ -140,7 +140,7 @@ class Client:
             if self.authenticate_request:
                 headers["Authorization"] = f"Bearer {self.id_token}"
             requests.post(
-                url, data=json.dumps(feedback_dict), headers=headers, timeout=10
+                url, data=json.dumps(feedback_dict), headers=headers, timeout=300
             )
         elif self.agent is not None:
             self.agent.register_feedback(feedback=feedback_dict)
@@ -159,7 +159,7 @@ class Client:
             if self.authenticate_request:
                 headers["Authorization"] = f"Bearer {self.id_token}"
             with requests.post(
-                self.url, json=data, headers=headers, stream=True, timeout=60
+                self.url, json=data, headers=headers, stream=True, timeout=300
             ) as response:
                 for line in response.iter_lines():
                     if line:
